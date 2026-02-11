@@ -1,9 +1,7 @@
-'use server';
-
 import { z } from 'zod';
 
 // Zod schema for input validation
-const LoanSchema = z.object({
+export const LoanSchema = z.object({
   principal: z.number().positive("대출 원금은 0보다 커야 합니다."),
   loanTermMonths: z.number().int().positive("대출 기간은 0보다 커야 합니다."),
   annualRate: z.number().positive("연 이자율은 0보다 커야 합니다."),
@@ -30,36 +28,18 @@ export interface CalculationResult {
   schedule: ScheduleEntry[];
 }
 
-export interface RefinanceInfo {
-  potentialSavings: number;
-  originalTotalInterest: number;
-  refinancedTotalInterest: number;
-}
-
-export interface AllScenariosResult {
-  results?: {
-    equalInstallments: CalculationResult;
-    equalPrincipal: CalculationResult;
-    bullet: CalculationResult;
-    refinance?: RefinanceInfo;
-    inputs: {
-        annualRate: number;
-    }
-  };
-  errors?: any;
-}
-
 // --- Helper: 월 상환금 계산 (원리금 균등)
 const getEqualInstallmentPayment = (p: number, r: number, n: number): number => {
     if (p <= 0 || n <= 0) return 0;
     const monthlyRate = r / 100 / 12;
-    if (monthlyRate === 0) return p / n;
-    return p * (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+    if (monthlyRate === 0) return Math.round(p / n);
+    const payment = p * (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+    return Math.round(payment);
 };
 
 
 // --- 1. 원리금 균등분할상환 ---
-const calculateEqualInstallments = (data: z.infer<typeof LoanSchema>): CalculationResult => {
+export const calculateEqualInstallments = (data: z.infer<typeof LoanSchema>): CalculationResult => {
     let remainingPrincipal = data.principal;
     let currentAnnualRate = data.annualRate;
     let totalInterest = 0;
@@ -76,16 +56,13 @@ const calculateEqualInstallments = (data: z.infer<typeof LoanSchema>): Calculati
             continue;
         }
 
-        const interestForThisMonth = remainingPrincipal * (currentAnnualRate / 100 / 12);
+        const interestForThisMonth = Math.round(remainingPrincipal * (currentAnnualRate / 100 / 12));
         let principalPayment = 0;
         if (month > graceMonths) {
             principalPayment = monthlyPayment - interestForThisMonth;
         }
 
         if (principalPayment < 0) principalPayment = 0;
-        if (principalPayment > remainingPrincipal) {
-             principalPayment = remainingPrincipal;
-        }
 
         let principalRepaidEarly = 0;
         let rateChanged = false;
@@ -93,29 +70,30 @@ const calculateEqualInstallments = (data: z.infer<typeof LoanSchema>): Calculati
 
         if (event) {
             if (event.amount) {
-                principalRepaidEarly = Math.min(event.amount, remainingPrincipal - principalPayment);
+                principalRepaidEarly = event.amount;
             }
             if (typeof event.newRate === 'number') {
                 rateChanged = true;
             }
         }
 
-        if (month === data.loanTermMonths && (principalPayment + principalRepaidEarly < remainingPrincipal)) {
-            principalPayment = remainingPrincipal - principalRepaidEarly;
+        let actualPrincipalPaid = principalPayment + principalRepaidEarly;
+        if (month === data.loanTermMonths || actualPrincipalPaid > remainingPrincipal) {
+            actualPrincipalPaid = remainingPrincipal;
         }
 
-        const totalPayment = principalPayment + interestForThisMonth + principalRepaidEarly;
+        const totalPayment = actualPrincipalPaid + interestForThisMonth;
         totalInterest += interestForThisMonth;
         
         schedule.push({ 
             month, 
-            principalPayment: principalPayment + principalRepaidEarly, 
+            principalPayment: actualPrincipalPaid, 
             interestPayment: interestForThisMonth, 
             totalPayment, 
-            remainingPrincipal: remainingPrincipal - principalPayment - principalRepaidEarly 
+            remainingPrincipal: remainingPrincipal - actualPrincipalPaid
         });
 
-        remainingPrincipal -= (principalPayment + principalRepaidEarly);
+        remainingPrincipal -= actualPrincipalPaid;
 
         if (event && (principalRepaidEarly > 0 || rateChanged)) {
              if (rateChanged) {
@@ -132,7 +110,7 @@ const calculateEqualInstallments = (data: z.infer<typeof LoanSchema>): Calculati
 };
 
 // --- 2. 원금 균등분할상환 ---
-const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationResult => {
+export const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationResult => {
     let remainingPrincipal = data.principal;
     let currentAnnualRate = data.annualRate;
     let totalInterest = 0;
@@ -141,7 +119,7 @@ const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationR
     const graceMonths = data.gracePeriodMonths ?? 0;
     
     let paymentMonths = data.loanTermMonths - graceMonths;
-    let principalPaymentPerMonth = paymentMonths > 0 ? remainingPrincipal / paymentMonths : 0;
+    let principalPaymentPerMonth = paymentMonths > 0 ? Math.round(data.principal / paymentMonths) : 0;
 
     for (let month = 1; month <= data.loanTermMonths; month++) {
          if (remainingPrincipal <= 0) {
@@ -149,10 +127,10 @@ const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationR
             continue;
         }
 
-        const interestForThisMonth = remainingPrincipal * (currentAnnualRate / 100 / 12);
+        const interestForThisMonth = Math.round(remainingPrincipal * (currentAnnualRate / 100 / 12));
         let principalPayment = 0;
         if (month > graceMonths) {
-            principalPayment = principalPaymentPerMonth;
+            principalPayment = (month === data.loanTermMonths) ? remainingPrincipal : principalPaymentPerMonth;
         }
         
         if (principalPayment > remainingPrincipal) {
@@ -165,29 +143,30 @@ const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationR
 
         if (event) {
             if (event.amount) {
-                principalRepaidEarly = Math.min(event.amount, remainingPrincipal - principalPayment);
+                principalRepaidEarly = event.amount;
             }
             if (typeof event.newRate === 'number') {
                 rateChanged = true;
             }
         }
-
-        if (month === data.loanTermMonths && (principalPayment + principalRepaidEarly < remainingPrincipal)) {
-            principalPayment = remainingPrincipal - principalRepaidEarly;
+        
+        let actualPrincipalPaid = principalPayment + principalRepaidEarly;
+        if (actualPrincipalPaid > remainingPrincipal) {
+            actualPrincipalPaid = remainingPrincipal;
         }
 
-        const totalPayment = principalPayment + interestForThisMonth + principalRepaidEarly;
+        const totalPayment = actualPrincipalPaid + interestForThisMonth;
         totalInterest += interestForThisMonth;
 
         schedule.push({ 
             month, 
-            principalPayment: principalPayment + principalRepaidEarly, 
+            principalPayment: actualPrincipalPaid, 
             interestPayment: interestForThisMonth, 
             totalPayment, 
-            remainingPrincipal: remainingPrincipal - principalPayment - principalRepaidEarly
+            remainingPrincipal: remainingPrincipal - actualPrincipalPaid
         });
         
-        remainingPrincipal -= (principalPayment + principalRepaidEarly);
+        remainingPrincipal -= actualPrincipalPaid;
         
         if (event && (principalRepaidEarly > 0 || rateChanged)) {
             if (rateChanged) {
@@ -196,7 +175,9 @@ const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationR
             const monthsLeft = data.loanTermMonths - month;
             const graceLeft = Math.max(0, graceMonths - month);
             paymentMonths = monthsLeft - graceLeft;
-            principalPaymentPerMonth = paymentMonths > 0 ? remainingPrincipal / paymentMonths : 0;
+            if (paymentMonths > 0) {
+                principalPaymentPerMonth = Math.round(remainingPrincipal / paymentMonths);
+            }
         }
     }
 
@@ -205,7 +186,7 @@ const calculateEqualPrincipal = (data: z.infer<typeof LoanSchema>): CalculationR
 
 
 // --- 3. 만기일시상환 (Bullet Payment) ---
-const calculateBulletPayment = (data: z.infer<typeof LoanSchema>): CalculationResult => {
+export const calculateBulletPayment = (data: z.infer<typeof LoanSchema>): CalculationResult => {
     let remainingPrincipal = data.principal;
     let currentAnnualRate = data.annualRate;
     let totalInterest = 0;
@@ -218,7 +199,7 @@ const calculateBulletPayment = (data: z.infer<typeof LoanSchema>): CalculationRe
             continue;
         }
 
-        const interestForThisMonth = remainingPrincipal * (currentAnnualRate / 100 / 12);
+        const interestForThisMonth = Math.round(remainingPrincipal * (currentAnnualRate / 100 / 12));
         let principalPayment = 0;
         
         let principalRepaidEarly = 0;
@@ -249,125 +230,7 @@ const calculateBulletPayment = (data: z.infer<typeof LoanSchema>): CalculationRe
         });
 
         remainingPrincipal -= (principalPayment + principalRepaidEarly);
-        
-        if (event && event.newRate) {
-            currentAnnualRate = event.newRate;
-        }
     }
 
     return { totalInterest, totalPaid: data.principal + totalInterest, schedule };
 };
-
-// --- 대환대출 절약액 계산 ---
-const calculateRefinanceSavings = (originalData: z.infer<typeof LoanSchema>, originalResult: CalculationResult): RefinanceInfo | null => {
-    const REFINANCE_MONTH = 12;
-    // 현실적인 대환 목표 금리: 제1금융권 고신용자 평균 대출금리 기준
-    const TIER_1_AVG_RATE = 3.8; 
-
-    // 1. 현재 금리가 이미 '제1금융권 평균'보다 낮거나 같으면 분석 중단
-    if (originalData.annualRate <= TIER_1_AVG_RATE) {
-        return null;
-    }
-
-    // 2. 대출 기간이 1년 이하이면 분석 중단
-    if (originalData.loanTermMonths <= REFINANCE_MONTH || originalResult.schedule.length <= REFINANCE_MONTH) {
-        return null;
-    }
-
-    // 3. 대환 후 금리는 (현재금리-1%)와 '제1금융권 평균' 중 더 높은(현실적인) 값을 사용
-    const newAnnualRate = Math.max(TIER_1_AVG_RATE, originalData.annualRate - 1.0);
-    
-    // 4. 만약 계산된 새 금리가 현재 금리보다 높거나 같으면 의미 없으므로 중단
-    if (newAnnualRate >= originalData.annualRate) return null;
-
-    const interestPaidSoFar = originalResult.schedule.slice(0, REFINANCE_MONTH).reduce((acc, s) => acc + s.interestPayment, 0);
-    const principalAtRefinance = originalResult.schedule[REFINANCE_MONTH - 1].remainingPrincipal;
-
-    const refinanceLoanData: z.infer<typeof LoanSchema> = {
-        principal: principalAtRefinance,
-        annualRate: newAnnualRate,
-        loanTermMonths: originalData.loanTermMonths - REFINANCE_MONTH,
-        repayments: [],
-        gracePeriodMonths: 0
-    };
-
-    const refinancedPartResult = calculateEqualInstallments(refinanceLoanData);
-    const refinancedTotalInterest = interestPaidSoFar + refinancedPartResult.totalInterest;
-    const potentialSavings = originalResult.totalInterest - refinancedTotalInterest;
-
-    if (potentialSavings <= 0) return null;
-
-    return {
-        potentialSavings,
-        originalTotalInterest: originalResult.totalInterest,
-        refinancedTotalInterest,
-    };
-}
-
-
-// --- Main Server Action ---
-export async function calculateAllLoanScenarios(prevState: any, formData: FormData): Promise<AllScenariosResult> {
-  try {
-    const principal = parseFloat(formData.get('principal') as string) * 10000;
-    const loanTermMonths = parseInt(formData.get('loanTermMonths') as string, 10);
-    const annualRate = parseFloat(formData.get('annualRate') as string);
-    const gracePeriodMonths = formData.get('gracePeriodMonths') ? parseInt(formData.get('gracePeriodMonths') as string, 10) : 0;
-
-    const repayments: z.infer<typeof LoanSchema>['repayments'] = [];
-    for (const [key, value] of formData.entries()) {
-        if (key.startsWith('repaymentRound_')) {
-            const index = key.split('_')[1];
-            if (!index) continue;
-            const round = parseInt(value as string, 10);
-            const amountValue = formData.get(`repaymentAmount_${index}`);
-            const newRateValue = formData.get(`newRate_${index}`);
-
-            if (round) {
-                 const repayment: {round: number, amount?: number, newRate?: number} = { round };
-                if (amountValue && parseFloat(amountValue as string) > 0) {
-                    repayment.amount = parseFloat(amountValue as string) * 10000;
-                }
-                if (newRateValue && parseFloat(newRateValue as string) >= 0) {
-                    repayment.newRate = parseFloat(newRateValue as string);
-                }
-                if (repayment.amount || typeof repayment.newRate === 'number') {
-                    repayments.push(repayment);
-                }
-            }
-        }
-    }
-
-    const validatedFields = LoanSchema.safeParse({ principal, loanTermMonths, annualRate, gracePeriodMonths, repayments });
-
-    if (!validatedFields.success) {
-      console.error("Validation Errors:", validatedFields.error.flatten().fieldErrors);
-      return { errors: validatedFields.error.flatten().fieldErrors };
-    }
-
-    const data = validatedFields.data;
-
-    const results: AllScenariosResult['results'] = {
-      equalInstallments: calculateEqualInstallments(data),
-      equalPrincipal: calculateEqualPrincipal(data),
-      bullet: calculateBulletPayment(data),
-      inputs: {
-          annualRate: data.annualRate
-      }
-    };
-
-    // --- 대환대출 분석 실행 ---
-    const refinanceInfo = calculateRefinanceSavings(data, results.equalInstallments);
-    if (refinanceInfo) {
-        results.refinance = refinanceInfo;
-    }
-
-    return { results };
-
-  } catch (error) {
-    console.error("Calculation Error:", error);
-    if (error instanceof Error) {
-        return { errors: { _form: [`서버 오류: ${error.message}`] } };
-    }
-    return { errors: { _form: ['서버에서 알 수 없는 계산 오류가 발생했습니다.'] } };
-  }
-}

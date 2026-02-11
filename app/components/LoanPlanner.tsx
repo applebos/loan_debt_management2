@@ -1,6 +1,7 @@
 'use client';
 
-import { calculateAllLoanScenarios, type AllScenariosResult, type ScheduleEntry, type RefinanceInfo } from '../lib/loanLogic';
+import { calculateAllLoanScenarios } from '../lib/actions';
+import type { AllScenariosResult, ScheduleEntry, RefinanceInfo } from '../lib/loanLogic';
 import React, { useState, useActionState } from 'react';
 
 const initialState: AllScenariosResult = {};
@@ -92,7 +93,7 @@ const LoanForm = ({ formAction }: { formAction: (payload: FormData) => void }) =
   {/* 대출 기간 */}
     <div className="flex items-center">
       <label htmlFor="loanTermMonths" className="w-28 text-gray-700 text-sm text-center font-medium">대출 기간</label>
-      <input type="number" id="loanTermMonths" name="loanTermMonths" required className="flex-none w-28 px-3 py-2 border border-gray-300 rounded-l-md focus:ring-2 focus:ring-blue-300 focus:border-blue-500" placeholder="총 개월수" />
+      <input type="number" id="loanTermMonths" name="loanTermMonths" required className="flex-none w-28 px-3 py-2 border border-ray-300 rounded-l-md focus:ring-2 focus:ring-blue-300 focus:border-blue-500" placeholder="총 개월수" />
       <span className="flex-none w-12 bg-gray-200 text-gray-700 px-2 py-2 rounded-r-md text-sm text-center">개월</span>
     </div>
 
