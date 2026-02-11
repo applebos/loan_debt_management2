@@ -21,7 +21,7 @@
   - 만기일시 상환
   - 각 방식의 총 이자, 총상환액을 테이블로 한눈에 비교하여 최적의 상환 전략 수립을 지원합니다.
 
-- ** phức tạp 시나리오 시뮬레이션**
+- **🔀 복합 시나리오 시뮬레이션**
   - **거치기간 설정:** 대출 초기, 이자만 납부하는 기간을 설정할 수 있습니다.
   - **중도상환 및 금리 변동:** 특정 회차에 원금을 추가 상환하거나, 금리가 변경되는 경우를 시나리오에 동적으로 추가하여 이후 상환 계획이 어떻게 바뀌는지 즉시 확인할 수 있습니다. `+`/`-` 버튼으로 여러 개의 이벤트를 자유롭게 추가/제거할 수 있습니다.
 
@@ -44,7 +44,25 @@
 - **Language**: TypeScript
 - **UI**: React, Tailwind CSS
 - **State Management**: React `useActionState` (for Server Actions)
+- **Testing**: Jest
 - **Validation**: Zod
+
+
+## 🧪 핵심 로직 및 단위 테스트
+
+이 프로젝트의 핵심인 대출 계산 로직(`app/lib/loanLogic.ts`)은 **자동화된 단위 테스트**를 통해 그 정확성과 안정성을 보장합니다. `Jest`를 사용하여 다음과 같은 핵심 시나리오들을 검증합니다.
+
+- **원리금 균등 상환 방식**
+  - ✔️ 표준 대출 계산
+  - ✔️ 거치기간 포함 계산
+  - ✔️ 중도상환 포함 계산
+
+- **원금 균등 상환 방식**
+  - ✔️ 표준 대출 계산
+
+`npm test` 명령어를 통해 언제든지 모든 테스트를 실행하고, 코드 변경으로 인한 잠재적 오류를 즉시 확인할 수 있습니다. 이는 복잡한 금융 계산의 신뢰도를 유지하는 중요한 장치입니다.
+
+더 자세한 테스트 케이스와 프로젝트 설계 내용은 `blueprint.md` 문서를 참고해주세요.
 
 
 ## 📁 프로젝트 구조 (Project Structure)
@@ -57,13 +75,14 @@
 │   ├── components/
 │   │   └── LoanPlanner.tsx  # 핵심 UI 컴포넌트
 │   └── lib/
-│       └── loanLogic.ts     # 모든 대출 계산 로직 (서버)
+│       ├── actions.ts       # 서버 액션 (UI와 로직 연결)
+│       ├── loanLogic.ts     # 모든 대출 계산 로직
+│       └── __tests__/
+│           └── loanLogic.test.ts # 단위 테스트 파일
 ├── public/                # 정적 에셋
 ├── blueprint.md           # 프로젝트 기획 및 설계 문서
 └── README.md              # 프로젝트 소개 문서
 ```
-- **/app/lib/loanLogic.ts**: 계산 로직을 서버 사이드에 집중시켜 보안을 강화하고, 복잡한 비즈니스 로직을 UI와 완벽하게 분리했습니다.
-- **/app/components/LoanPlanner.tsx**: 메인 UI를 여러 개의 하위 컴포넌트(InfoTabs, LoanForm, ResultsDisplay 등)로 분리하여 코드의 가독성과 재사용성, 유지보수성을 높였습니다.
 
 
 ## 🚀 시작하기 (Getting Started)
@@ -77,10 +96,10 @@
 
 ```bash
 # 1. 프로젝트 클론
-git clone https://github.com/[YOUR_USERNAME]/[REPOSITORY_NAME].git
+git clone https://github.com/applebos/loan_debt_management2.git
 
 # 2. 프로젝트 폴더로 이동
-cd [REPOSITORY_NAME]
+cd loan_debt_management2
 
 # 3. 의존성 패키지 설치
 npm install
@@ -92,6 +111,12 @@ npm install
 npm run dev
 ```
 브라우저에서 `http://localhost:3000`으로 접속하세요.
+
+### 4. 테스트 실행 (Running Tests)
+
+```bash
+npm test
+```
 
 
 ## 🌟 향후 계획 (Future Plans)
