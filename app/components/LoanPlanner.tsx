@@ -192,7 +192,7 @@ const RefinanceSuggestion = ({ refinanceInfo, annualRate }: { refinanceInfo: Ref
     const [showLinks, setShowLinks] = useState(false);
     const HIGH_RATE_THRESHOLD = 5.0;
     const externalLinks = [
-        { name: '카카오뱅크', url: 'https://www.kakaobank.com/products/loan-refinance' },
+        { name: '카카오뱅크', url: 'https://www.kakaobank.com/products/refinanceLoan' },
         { name: '하나은행', url: 'https://m.hanacard.co.kr/MKTRLO0000M.web' },
         { name: '네이버페이', url: 'https://loan.pay.naver.com/n/mortgage' },
         { name: 'KB국민', url: 'https://obank.kbstar.com/quics?QSL=F&cc=b104363:b104516&isNew=N&page=C103429&prcode=LN20001334&utm_source=chatgpt.com' },
